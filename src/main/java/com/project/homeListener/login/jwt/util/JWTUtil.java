@@ -59,7 +59,7 @@ public class JWTUtil {
                 .subject(subject)
                 .claim(idClaimKey, id)
                 .issuedAt(new Date())
-                .expiration(new Date(System.currentTimeMillis() + accessTokenExpiration))
+                .expiration(new Date(System.currentTimeMillis() + accessTokenExpiration * 1000))
                 .signWith(accessTokenSecretKey)
                 .compact();
     }
@@ -121,11 +121,11 @@ public class JWTUtil {
         return new UserInformInToken(id, subject);
     }
 
-    public UserInformInToken getUserInformInRefreshToken(String accessToken) {
+    public UserInformInToken getUserInformInRefreshToken(String refreshToken) {
         Claims claims = Jwts.parser()
                 .verifyWith(refreshTokenSecretKey)
                 .build()
-                .parseSignedClaims(accessToken)
+                .parseSignedClaims(refreshToken)
                 .getPayload();
 
         Long id = claims.get(idClaimKey, Long.class);
