@@ -1,0 +1,10 @@
+version: '3'
+
+services:
+    myWAS:
+        container_name: ventureBackend
+        image: ${DOCKER_USERNAME}/${DOCKER_IMAGE_NAME}
+        expose:
+            - ${DOCKER_PORT} # server 인스턴스와 docker 사이를 연결하기 위해서 docker가 허용할 포트
+        ports:
+            - ${SERVER_PORT}:${DOCKER_PORT} # server 인스턴스의 포트와 docker가 허용한 포트를 연결

@@ -1,0 +1,120 @@
+name: CD with Gradle
+
+on:
+    push:
+        branches: [ "main", "ci" ]
+
+env:
+    DOCKER_REPO: ${{ secrets.DOCKER_REPO }}                                                     # Docker Hub Repository 이름
+    DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}                                             # Docker Hub Username
+    DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}                                             # Docker Hub Password
+    DOCKER_IMAGE_NAME: ${{ secrets.DOCKER_IMAGE_NAME }}                                         # Docker Hub에 올릴 이미지 이름
+    DOCKER_PORT: ${{ secrets.DOCKER_PORT }}                                                     # 서버와 Docker를 연결하기 위해서 Docker가 허용할 포트
+
+    SERVER_HOST: ${{ secrets.EC2_HOST }}                                                     # 서버의 퍼블릭 IP
+    SERVER_USERNAME: ${{ secrets.EC2_USERNAME }}                                             # 서버의 유저명              ex) ubuntu
+    SERVER_PRIVATE_KEY: ${{ secrets.EC2_PRIVATE_KEY }}                                       # 서버의 키페어(.pem) 내용
+    SERVER_PORT: ${{ secrets.EC2_PORT }}                                                     # 서버의 포트를 docker의 포트와 연결
+    SERVER_SSH_PORT: ${{ secrets.EC2_SSH_PORT }}                                             # 서버의 SSH 포트            ex) 22
+    SERVER_WORKSPACE: /home/${{secrets.EC2_USERNAME}}/${{ secrets.EC2_WORKSPACE_NAME }}   # 서버의 작업 디렉토리         ex) /home/ubuntu/myWorkSpace
+
+    CREDENTIAL_PROPERTIES_YAML: ${{ secrets.CREDENTIAL_PROPERTIES_YAML }}                   # application-credential.yaml 파일 내용
+
+# 실제 실행될 내용들을 정의합니다.
+jobs:
+    build-and-push:
+        runs-on: ubuntu-latest # ubuntu 최신 버전에서 script를 실행
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v3
+
+            - uses: actions/setup-java@v4
+              with:
+                  distribution: 'temurin'
+                  java-version: '21'
+
+
+            # Github secrets로부터 데이터를 받아서, 워크 플로우에 파일을 생성
+            - name: Make application-credential.yaml
+              run: |
+                  cd ./src/main/resources
+                  touch ./application-credential.yaml
+                  echo "${{ env.CREDENTIAL_PROPERTIES_YAML }}" > ./application-credential.yaml
+              shell: bash
+
+            # docker-compose.yml 내의 변수를 Github secrets로부터 받은 데이터로 변경
+            - name: Replace docker-compose.yml variable
+              uses: danielr1996/envsubst-action@1.1.0
+              env:
+                  DOCKER_USERNAME: ${{ env.DOCKER_USERNAME }}
+                  DOCKER_IMAGE_NAME: ${{ env.DOCKER_IMAGE_NAME }}
+                  DOCKER_PORT: ${{ env.DOCKER_PORT }}
+                  SERVER_PORT: ${{ env.SERVER_PORT }}
+              with:
+                  input: docker-compose.template.yml
+                  output: docker-compose.yml
+
+            #서버 작업 디렉토리 생성, 서버의 docker-compose.yml 삭제
+            - name: Create workspace and Delete docker-compose.yml in server
+              uses: appleboy/ssh-action@master
+              with:
+                  host: ${{ env.SERVER_HOST }} # 서버의 퍼블릭 IP
+                  username: ${{ env.SERVER_USERNAME }} # 서버의 유저명
+                  key: ${{ env.SERVER_PRIVATE_KEY }} # 서버의 키페어(.pem)
+                  port: ${{ env.SERVER_SSH_PORT }} # 서버의 SSH 포트
+                  debug: true
+                  script: |
+                      mkdir -p ${{ env.SERVER_WORKSPACE }} 
+                      cd ${{ env.SERVER_WORKSPACE }}
+                      rm -rf ./docker-compose.yml
+            
+
+            # docker-compose.yml 파일을 scp로 서버로 전송
+            - name: SCP docker-compose.yml
+              uses: appleboy/scp-action@master
+              with:
+                  host: ${{ env.SERVER_HOST }} # 서버의 퍼블릭 IP
+                  username: ${{ env.SERVER_USERNAME }} # 서버의 유저명
+                  key: ${{ env.SERVER_PRIVATE_KEY }} # 서버의 키페어(.pem)
+                  port: ${{ env.SERVER_SSH_PORT }} # 서버의 SSH 포트
+                  source: ./docker-compose.yml # 현재 프로젝트 내의 docker-compose.yml 파일
+                  target: ${{ env.SERVER_WORKSPACE }} # 서버의 작업 디렉토리
+
+            # 현재 프로젝트 내의 docker-compose.yml 파일 삭제
+            - name: Delete docker-compose.yml in project
+              run: |
+                  rm -rf ./docker-compose.yml
+
+            # gradle을 통해 소스를 빌드.
+            - name: Build with Gradle
+              run: |
+                  chmod +x ./gradlew
+                  ./gradlew clean build -x test
+
+            - name: docker login
+              uses: docker/login-action@v1
+              with:
+                  username: ${{ env.DOCKER_USERNAME }}
+                  password: ${{ env.DOCKER_PASSWORD }}
+
+            - name: Build and push docker image
+              uses: docker/build-push-action@v2
+              with:
+                  context: .
+                  push: true #빌드 후 배포 여부 체크
+                  tags: ${{ env.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:latest
+
+            - name: Deploy to SERVER by Docker
+              uses: appleboy/ssh-action@master
+              with:
+                  host: ${{ env.SERVER_HOST }} # 서버의 퍼블릭 IP
+                  username: ${{ env.SERVER_USERNAME }} # 서버의 유저명
+                  key: ${{ env.SERVER_PRIVATE_KEY }} # 서버의 키페어(.pem)
+                  port: ${{ env.SERVER_SSH_PORT }} # 서버의 SSH 포트
+                  debug: true
+                  script: |
+                      cd ${{ env.SERVER_WORKSPACE }}
+                      sudo docker-compose down
+                      sudo docker pull ${{ env.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:latest
+                      sudo docker-compose up -d
