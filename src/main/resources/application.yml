@@ -11,7 +11,8 @@ spring:
     profiles:
         include: credential
 
-
+springdoc:
+    show-login-endpoint: true
 
 logging:
     level:

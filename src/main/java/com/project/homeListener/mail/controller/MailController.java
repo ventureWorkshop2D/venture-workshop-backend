@@ -11,6 +11,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.Arrays;
+
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/mail")
@@ -20,8 +22,8 @@ public class MailController {
 
     @PostMapping
     public ResponseEntity<Void> sendMail(@AuthenticationPrincipal UserInformInToken userInform,
-                                              @RequestParam("recordingFile") MultipartFile recordingFile) {
-        mailService.sendRecordingFile(userInform, recordingFile);
+                                        @RequestParam String fileURL) {
+        mailService.sendRecordingFiles(userInform, fileURL);
         return ResponseEntity.ok().build();
     }
 
