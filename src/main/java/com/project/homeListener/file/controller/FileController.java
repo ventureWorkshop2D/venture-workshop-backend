@@ -1,12 +1,13 @@
 package com.project.homeListener.file.controller;
 
-import com.project.homeListener.file.service.S3FileUploader;
+import com.project.homeListener.file.service.FileService;
 import com.project.homeListener.login.jwt.entity.UserInformInToken;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.net.URISyntaxException;
 import java.net.URL;
 
 @RestController
@@ -14,12 +15,13 @@ import java.net.URL;
 @RequiredArgsConstructor
 public class FileController {
 
-    private final S3FileUploader s3FileUploader;
+    private final FileService fileService;
 
     @PostMapping("/presigned-url")
-    public ResponseEntity<URL> getPresignedUrl(@AuthenticationPrincipal UserInformInToken userInform) {
-        URL url = s3FileUploader.generatePresignedUrl(userInform.getId());
+    public ResponseEntity<URL> getPresignedUrl(@AuthenticationPrincipal UserInformInToken userInform) throws URISyntaxException {
+        URL url = fileService.getPresignedUrl(userInform);
 
         return ResponseEntity.ok(url);
     }
+
 }
