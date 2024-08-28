@@ -8,9 +8,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
-import org.springframework.web.multipart.MultipartFile;
-
-import java.util.List;
+import org.thymeleaf.TemplateEngine;
+import org.thymeleaf.context.Context;
 
 @Slf4j
 @Service
@@ -21,6 +20,17 @@ public class MailService {
 
     private final JavaMailSender javaMailSender;
 
+    private final TemplateEngine templateEngine;
+
+
+    private String generateEmailContent(String fileURL) {
+        Context context = new Context();
+        context.setVariable("fileURL", fileURL);
+
+        return templateEngine.process("emailTemplate", context);
+    }
+
+
     public void sendRecordingFiles(UserInformInToken userInform, String fileURL) {
         String userEmail = userService.findEmailByUserId(userInform.getId());
 
@@ -28,9 +38,11 @@ public class MailService {
             MimeMessage mimeMessage = javaMailSender.createMimeMessage();
             MimeMessageHelper mimeMessageHelper = new MimeMessageHelper(mimeMessage, false, "UTF-8");
 
+
+
             mimeMessageHelper.setTo(userEmail);
-            mimeMessageHelper.setSubject("Home Listener alert");
-            mimeMessageHelper.setText("Something might be happening at home. Please check the audio file link below.\n" + fileURL);
+            mimeMessageHelper.setSubject("Home Listener 이상상황 알림입니다.");
+            mimeMessageHelper.setText(generateEmailContent(fileURL), true);
 
             javaMailSender.send(mimeMessage);
         } catch (Exception e) {
