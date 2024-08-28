@@ -16,8 +16,8 @@ public class UserController {
     private final UserService userService;
 
     @PostMapping
-    public ResponseEntity<Void> register(@RequestBody @Valid RegisterRequestDTO registerRequestDTO) {
+    public ResponseEntity<String> register(@RequestBody @Valid RegisterRequestDTO registerRequestDTO) {
         userService.register(registerRequestDTO);
-        return new ResponseEntity<>(HttpStatus.CREATED);
+        return new ResponseEntity<>("Register Completed.", HttpStatus.CREATED);
     }
 }
